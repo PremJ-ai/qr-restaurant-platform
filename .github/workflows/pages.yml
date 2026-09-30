@@ -1,4 +1,4 @@
-name: Deploy static site to GitHub Pages
+name: Build React customer + Angular staff portal
 on:
   push:
     branches: [main]
@@ -11,20 +11,42 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/customer-react/package-lock.json
+            apps/staff-angular/package-lock.json
+      - uses: actions/configure-pages@v5
+      - name: Build customer React
+        working-directory: apps/customer-react
+        run: npm install --no-audit --no-fund && npm run build
+      - name: Build staff Angular
+        working-directory: apps/staff-angular
+        run: npm install --no-audit --no-fund && npm run build
+      - name: Assemble Pages artifact
+        run: |
+          rm -rf site
+          mkdir -p site
+          cp -R apps/customer-react/dist/. site/
+          mkdir -p site/portal
+          if [ -d apps/staff-angular/dist/staff-angular/browser ]; then cp -R apps/staff-angular/dist/staff-angular/browser/. site/portal/; else cp -R apps/staff-angular/dist/staff-angular/. site/portal/; fi
+          cp -R api workflow stitch qr site/
+          touch site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - id: deployment
+        uses: actions/deploy-pages@v5
